@@ -51,7 +51,8 @@ class Indexer {
   _getTransactionsByScriptIterator(script, scriptType) {
     return this.nativeIndexer.getTransactionsByScriptIterator(
       normalizers.NormalizeScript(script),
-      scriptType
+      scriptType,
+      ioType
     );
   }
 
@@ -190,88 +191,90 @@ class CellCollector {
 class TransactionCollector {
   constructor(
     indexer,
-    { lock = null, type = null } = {},
+    { input_lock = null, output_lock = null, input_type = null, output_type } = {},
     { skipMissing = false, includeStatus = true } = {}
   ) {
-    if (!lock && !type) {
+    if (!input_lock && !output_lock && !input_type && output_type) {
       throw new Error("Either lock or type script must be provided!");
     }
-    if (lock) {
-      validators.ValidateScript(lock);
+    if (input_lock) {
+      validators.ValidateScript(input_lock);
     }
-    if (type) {
-      validators.ValidateScript(type);
+    if (output_lock) {
+      validators.ValidateScript(output_lock);
+    }
+    if (input_type) {
+      validators.ValidateScript(input_type);
+    }
+    if (output_type) {
+      validators.ValidateScript(ouput_type);
     }
     this.indexer = indexer;
-    this.lock = lock;
-    this.type = type;
+    this.input_lock = input_lock;
+    this.output_lock = output_lock;
+    this.input_type = input_type;
+    this.output_type = output_type;
     this.skipMissing = skipMissing;
     this.includeStatus = includeStatus;
     this.rpc = new RPC(indexer.uri);
   }
 
   async count() {
-    if (this.lock && this.type) {
-      const lockHashes = new OrderedSet(
-        this.indexer._getTransactionsByScriptIterator(this.lock, 0).collect()
-      );
-      const typeHashes = new OrderedSet(
-        this.indexer._getTransactionsByScriptIterator(this.type, 1).collect()
-      );
-      const hashes = lockHashes.intersect(typeHashes);
-      return hashes.size;
-    } else {
-      const script = this.lock || this.type;
-      const scriptType = !!this.lock ? 0 : 1;
-      const iter = this.indexer._getTransactionsByScriptIterator(
-        script,
-        scriptType
-      );
-      return iter.count();
+    let hashes = new OrderedSet();
+    if (this.input_lock) {
+      const inputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
+      hashes = hashes.intersect(inputLockHashes);
     }
+
+    if (this.output_lock) {
+      const outputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
+      hashes = hashes.intersect(outputLockHashes);
+    }
+
+    if (this.input_type) {
+      const inputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
+      hashes = hashes.intersect(inputTypeHashes);
+    }
+
+    if (this.output_type) {
+      const outputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
+      hashes = hashes.intersect(outputTypeHashes);
+    }
+
+    return hashes.size;
   }
 
   async *collect() {
-    if (this.lock && this.type) {
-      const lockHashes = new OrderedSet(
-        this.indexer._getTransactionsByScriptIterator(this.lock, 0).collect()
-      );
-      const typeHashes = new OrderedSet(
-        this.indexer._getTransactionsByScriptIterator(this.type, 1).collect()
-      );
-      const hashes = lockHashes.intersect(typeHashes);
-      for (const h of hashes) {
-        const tx = await this.rpc.get_transaction(hash);
-        if (!this.skipMissing && !tx) {
-          throw new Error(`Transaction ${h} is missing!`);
-        }
-        if (this.includeStatus) {
-          yield tx;
-        } else {
-          yield tx.transaction;
-        }
+    let hashes = new OrderedSet();
+    if (this.input_lock) {
+      const inputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
+      hashes = hashes.intersect(inputLockHashes);
+    }
+
+    if (this.output_lock) {
+      const outputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
+      hashes = hashes.intersect(outputLockHashes);
+    }
+
+    if (this.input_type) {
+      const inputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
+      hashes = hashes.intersect(inputTypeHashes);
+    }
+
+    if (this.output_type) {
+      const outputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
+      hashes = hashes.intersect(outputTypeHashes);
+    }
+
+    for (const h of hashes) {
+      const tx = await this.rpc.get_transaction(hash);
+      if (!this.skipMissing && !tx) {
+        throw new Error(`Transaction ${h} is missing!`);
       }
-    } else {
-      const script = this.lock || this.type;
-      const scriptType = !!this.lock ? 0 : 1;
-      const iter = this.indexer._getTransactionsByScriptIterator(
-        script,
-        scriptType
-      );
-      while (true) {
-        const hash = iter.next();
-        if (!hash) {
-          break;
-        }
-        const tx = await this.rpc.get_transaction(hash);
-        if (!this.skipMissing && !tx) {
-          throw new Error(`Transaction ${h} is missing!`);
-        }
-        if (this.includeStatus) {
-          yield tx;
-        } else {
-          yield tx.transaction;
-        }
+      if (this.includeStatus) {
+        yield tx;
+      } else {
+        yield tx.transaction;
       }
     }
   }

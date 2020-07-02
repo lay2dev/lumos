@@ -297,9 +297,10 @@ declare_types! {
         method getTransactionsByScriptIterator(mut cx) {
             let js_script = cx.argument::<JsValue>(0)?;
             let script_type = cx.argument::<JsValue>(1)?;
+            let io_type = cx.argument::<JsValue>(2)?;
             let this = cx.this().upcast();
 
-            Ok(JsTransactionIterator::new(&mut cx, vec![this, js_script, script_type])?.upcast())
+            Ok(JsTransactionIterator::new(&mut cx, vec![this, js_script, script_type, io_type])?.upcast())
         }
 
         method getDetailedLiveCell(mut cx) {
@@ -428,18 +429,20 @@ declare_types! {
                 return cx.throw_error(format!("Error assembling script: {:?}", script.unwrap_err()));
             }
             let script = script.unwrap();
-            let prefix = if cx.argument::<JsNumber>(2)?.value() as u32 == 1 {
+            let script_type = cx.argument::<JsNumber>(2)?.value() as u32;
+            let prefix = if script_type == 1 {
                 KeyPrefix::TxTypeScript
             } else {
                 KeyPrefix::TxLockScript
             };
+            let io_type = cx.argument::<JsNumber>(3)?.value() as u8;
             let mut start_key = vec![prefix as u8];
             start_key.extend_from_slice(&script.as_slice()[SCRIPT_SERIALIZE_OFFSET..]);
             let iter = store.iter(&start_key, IteratorDirection::Forward);
             if iter.is_err() {
                 return cx.throw_error("Error creating iterator!");
             }
-            let iter = iter.unwrap().take_while(move |(key, _)| key.starts_with(&start_key));
+            let iter = iter.unwrap().take_while(move |(key, _)| key.starts_with(&start_key) && key.ends_with(&[io_type]));
             Ok(TransactionIterator(Box::new(iter)))
         }
 
