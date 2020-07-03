@@ -48,7 +48,7 @@ class Indexer {
     );
   }
 
-  _getTransactionsByScriptIterator(script, scriptType) {
+  _getTransactionsByScriptIterator(script, scriptType, ioType) {
     return this.nativeIndexer.getTransactionsByScriptIterator(
       normalizers.NormalizeScript(script),
       scriptType,
@@ -220,53 +220,61 @@ class TransactionCollector {
   }
 
   async count() {
-    let hashes = new OrderedSet();
+    let hashes = new Set();
+    let lockHashes = new Set();
+    let typeHashes = new Set();
     if (this.input_lock) {
-      const inputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
-      hashes = hashes.intersect(inputLockHashes);
+      let inputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
+      lockHashes = new Set([...inputLockHashes]);
     }
 
     if (this.output_lock) {
-      const outputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
-      hashes = hashes.intersect(outputLockHashes);
+      let outputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
+      lockHashes = new Set([...lockHashes, ...outputLockHashes]);
     }
 
     if (this.input_type) {
-      const inputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
-      hashes = hashes.intersect(inputTypeHashes);
+      let inputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
+      typeHashes = new Set([...inputTypeHashes]);
     }
 
     if (this.output_type) {
-      const outputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
-      hashes = hashes.intersect(outputTypeHashes);
+      let outputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
+      typeHashes = new Set([...typeHashes, ...outputTypeHashes]);
     }
+
+    hashes = new Set([...lockHashes, ...typeHashes]);
 
     return hashes.size;
   }
 
   async *collect() {
-    let hashes = new OrderedSet();
+    let hashes = new Set();
+    let lockHashes = new Set();
+    let typeHashes = new Set();
     if (this.input_lock) {
-      const inputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
-      hashes = hashes.intersect(inputLockHashes);
+      let inputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
+      lockHashes = new Set([...inputLockHashes]);
     }
 
     if (this.output_lock) {
-      const outputLockHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
-      hashes = hashes.intersect(outputLockHashes);
+      let outputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
+      lockHashes = new Set([...lockHashes, ...outputLockHashes]);
     }
 
     if (this.input_type) {
-      const inputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
-      hashes = hashes.intersect(inputTypeHashes);
+      let inputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
+      typeHashes = new Set([...inputTypeHashes]);
     }
 
     if (this.output_type) {
-      const outputTypeHashes = new OrderedSet(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
-      hashes = hashes.intersect(outputTypeHashes);
+      let outputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
+      typeHashes = new Set([...typeHashes, ...outputTypeHashes]);
     }
 
-    for (const h of hashes) {
+    hashes = new Set([...lockHashes, ...typeHashes]);
+
+    for (const hash of hashes) {
       const tx = await this.rpc.get_transaction(hash);
       if (!this.skipMissing && !tx) {
         throw new Error(`Transaction ${h} is missing!`);
