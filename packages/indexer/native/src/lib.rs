@@ -435,14 +435,22 @@ declare_types! {
             } else {
                 KeyPrefix::TxLockScript
             };
-            let io_type = cx.argument::<JsNumber>(3)?.value() as u8;
             let mut start_key = vec![prefix as u8];
             start_key.extend_from_slice(&script.as_slice()[SCRIPT_SERIALIZE_OFFSET..]);
             let iter = store.iter(&start_key, IteratorDirection::Forward);
             if iter.is_err() {
                 return cx.throw_error("Error creating iterator!");
             }
-            let iter = iter.unwrap().take_while(move |(key, _)| key.starts_with(&start_key) && key.ends_with(&[io_type]));
+            let io_type= cx.argument::<JsValue>(3)?;
+            let end_key =
+            if io_type.is_a::<JsNumber>() {
+                let io_type_number = cx.argument::<JsNumber>(3)?.value() as u8;
+                vec![io_type_number]
+            } else {
+                vec![]
+            };
+            // FIXME
+            let iter = iter.unwrap().take_while(move |(key, _)| key.starts_with(&start_key) && key.ends_with(&end_key));
             Ok(TransactionIterator(Box::new(iter)))
         }
 

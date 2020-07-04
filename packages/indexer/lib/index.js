@@ -191,88 +191,159 @@ class CellCollector {
 class TransactionCollector {
   constructor(
     indexer,
-    { input_lock = null, output_lock = null, input_type = null, output_type } = {},
+    { lock = null, type = null } = {},
     { skipMissing = false, includeStatus = true } = {}
   ) {
-    if (!input_lock && !output_lock && !input_type && output_type) {
+    if (!lock && !type) {
       throw new Error("Either lock or type script must be provided!");
     }
-    if (input_lock) {
-      validators.ValidateScript(input_lock);
+
+    if (lock && !lock.script) {
+      validators.ValidateScript(lock);
     }
-    if (output_lock) {
-      validators.ValidateScript(output_lock);
+
+    if (lock && lock.script) {
+      validators.ValidateScript(lock.script);
     }
-    if (input_type) {
-      validators.ValidateScript(input_type);
+
+    if (type && !type.script) {
+      validators.ValidateScript(type);
     }
-    if (output_type) {
-      validators.ValidateScript(ouput_type);
+
+    if (type && type.script) {
+      validators.ValidateScript(type.script);
     }
+
     this.indexer = indexer;
-    this.input_lock = input_lock;
-    this.output_lock = output_lock;
-    this.input_type = input_type;
-    this.output_type = output_type;
+    this.lock = lock;
+    this.type = type;
     this.skipMissing = skipMissing;
     this.includeStatus = includeStatus;
     this.rpc = new RPC(indexer.uri);
   }
 
   async count() {
-    let hashes = new Set();
-    let lockHashes = new Set();
-    let typeHashes = new Set();
-    if (this.input_lock) {
-      let inputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
-      lockHashes = new Set([...inputLockHashes]);
+    let hashes = null;
+    let lockHashes = null;
+    let typeHashes = null;
+
+    if (this.lock) {
+      let script_type = 0;
+      let script = null;
+      let io_type = null;
+      if (!this.lock.script) {
+        script = this.lock;
+      } else {
+        script = this.lock.script;
+        if (this.lock.io_type == "input") {
+          io_type = 0;
+        } else if (this.lock.io_type == "output") {
+          io_type = 1;
+        } else {
+          throw new Error("io_type should be either input or output");
+        }
+      }
+      lockHashes = new OrderedSet(
+        this.indexer
+          ._getTransactionsByScriptIterator(script, script_type, io_type)
+          .collect()
+      );
     }
 
-    if (this.output_lock) {
-      let outputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
-      lockHashes = new Set([...lockHashes, ...outputLockHashes]);
+    if (this.type) {
+      let script_type = 1;
+      let script = null;
+      let io_type = null;
+      if (!this.type.script) {
+        script = this.type;
+      } else {
+        script = this.type.script;
+        if (this.type.io_type == "input") {
+          io_type = 0;
+        } else if (this.type.io_type == "output") {
+          io_type = 1;
+        } else {
+          throw new Error("io_type should be either input or output");
+        }
+      }
+      typeHashes = new OrderedSet(
+        this.indexer
+          ._getTransactionsByScriptIterator(script, script_type, io_type)
+          .collect()
+      );
     }
 
-    if (this.input_type) {
-      let inputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
-      typeHashes = new Set([...inputTypeHashes]);
+    if (this.lock && this.type) {
+      hashes = lockHashes.intersect(typeHashes);
+    } else if (this.lock) {
+      hashes = lockHashes;
+    } else {
+      hashes = typeHashes;
     }
-
-    if (this.output_type) {
-      let outputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
-      typeHashes = new Set([...typeHashes, ...outputTypeHashes]);
-    }
-
-    hashes = new Set([...lockHashes, ...typeHashes]);
 
     return hashes.size;
   }
 
   async *collect() {
-    let hashes = new Set();
-    let lockHashes = new Set();
-    let typeHashes = new Set();
-    if (this.input_lock) {
-      let inputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_lock, 0, 0).collect());
-      lockHashes = new Set([...inputLockHashes]);
+    let hashes = null;
+    let lockHashes = null;
+    let typeHashes = null;
+
+    if (this.lock) {
+      let script_type = 0;
+      let script = null;
+      let io_type = null;
+      // here must keep consistent with low level storage impl:
+      // input => 0, output => 1
+      if (!this.lock.script) {
+        script = this.lock;
+      } else {
+        script = this.lock.script;
+        if (this.lock.io_type == "input") {
+          io_type = 0;
+        } else if (this.lock.io_type == "output") {
+          io_type = 1;
+        } else {
+          throw new Error("io_type should be either input or output");
+        }
+      }
+      lockHashes = new OrderedSet(
+        this.indexer
+          ._getTransactionsByScriptIterator(script, script_type, io_type)
+          .collect()
+      );
     }
 
-    if (this.output_lock) {
-      let outputLockHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_lock, 0, 1).collect());
-      lockHashes = new Set([...lockHashes, ...outputLockHashes]);
+    if (this.type) {
+      let script_type = 1;
+      let script = null;
+      let io_type = null;
+      if (!this.type.script) {
+        script = this.type;
+      } else {
+        script = this.type.script;
+        if (this.type.io_type == "input") {
+          io_type = 0;
+        } else if (this.type.io_type == "output") {
+          io_type = 1;
+        } else {
+          throw new Error("io_type should be either input or output");
+        }
+      }
+      typeHashes = new OrderedSet(
+        this.indexer
+          ._getTransactionsByScriptIterator(script, script_type, io_type)
+          .collect()
+      );
     }
 
-    if (this.input_type) {
-      let inputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.input_type, 1, 0).collect());
-      typeHashes = new Set([...inputTypeHashes]);
+    if (this.lock && this.type) {
+      hashes = lockHashes.intersect(typeHashes);
+    } else if (this.lock) {
+      hashes = lockHashes;
+    } else {
+      hashes = typeHashes;
     }
-
-    if (this.output_type) {
-      let outputTypeHashes = new Set(this.indexer._getTransactionsByScriptIterator(this.output_type, 1, 1).collect());
-      typeHashes = new Set([...typeHashes, ...outputTypeHashes]);
-    }
-
-    hashes = new Set([...lockHashes, ...typeHashes]);
 
     for (const hash of hashes) {
       const tx = await this.rpc.get_transaction(hash);
