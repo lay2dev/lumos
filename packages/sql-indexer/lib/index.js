@@ -1,4 +1,6 @@
-const { RPC, Reader, validators } = require("ckb-js-toolkit");
+const { RPC, Reader, validators, normalizers } = require("ckb-js-toolkit");
+const { core, utils } = require('@ckb-lumos/base')
+const { CKBHasher, ckbHash, } = utils;
 
 const SCRIPT_TYPE_LOCK = 0;
 const SCRIPT_TYPE_TYPE = 1;
@@ -17,6 +19,7 @@ function hexToDbBigInt(hex) {
 function dbBigIntToHex(i) {
   return "0x" + BigInt(i).toString(16);
 }
+
 
 function nodeBufferToHex(b) {
   return new Reader(
@@ -44,12 +47,33 @@ async function locateScript(knex, id) {
   return dbItemToScript(data[0]);
 }
 
+function leftPadHex(hex, length) {
+  const pureHex = hex.replace('0x', '');
+  if (pureHex.length >= length) {
+    return '0x' + pureHex;
+  } else {
+    return '0x' + '0'.repeat(length - pureHex.length) + pureHex;
+  }
+}
+
+function scriptToHash (script) {
+  const scriptHash = ckbHash(
+    core.SerializeScript(normalizers.NormalizeScript(script)))
+  .serializeJson();
+
+  return hexToNodeBuffer(scriptHash);
+}
+
 async function ensureScriptInserted(trx, script, hasReturning) {
+  const script_hash = scriptToHash(script);
   const data = {
     code_hash: hexToNodeBuffer(script.code_hash),
     hash_type: script.hash_type === "type" ? 1 : 0,
     args: hexToNodeBuffer(script.args),
+    script_hash,
   };
+
+
   let ids = await trx("scripts").where(data).select("id");
   if (ids.length === 0) {
     ids = await trx("scripts").insert([data], hasReturning ? ["id"] : null);
@@ -103,6 +127,10 @@ class Indexer {
           "Native indexer has stopped, maybe check the log?"
         );
         this.start();
+      } else {
+        this.tip().then((val) => {
+          this.logger('info', `sync db now ${JSON.stringify(val)}`);
+        });
       }
     }, this.livenessCheckIntervalSeconds * 1000);
   }
@@ -182,9 +210,16 @@ class Indexer {
   async append(block) {
     await this.knex.transaction(async (trx) => {
       const blockNumber = hexToDbBigInt(block.header.number);
+      const dao = hexToNodeBuffer(block.header.dao);
+      const timestamp = hexToDbBigInt(block.header.timestamp);
+      const epoch = hexToNodeBuffer(leftPadHex(block.header.epoch, 14));
+
       await trx("block_digests").insert({
         block_number: blockNumber,
         block_hash: hexToNodeBuffer(block.header.hash),
+        epoch,
+        dao,
+        timestamp
       });
 
       for (const [txIndex, tx] of block.transactions.entries()) {
@@ -233,11 +268,12 @@ class Indexer {
           }
         }
         await trx("transaction_inputs").insert(
-          tx.inputs.map((input) => {
+          tx.inputs.map((input, index) => {
             return {
               transaction_digest_id: txId,
               previous_tx_hash: hexToNodeBuffer(input.previous_output.tx_hash),
               previous_index: hexToDbBigInt(input.previous_output.index),
+              input_index: BigInt(index).toString(),
             };
           })
         );
@@ -291,7 +327,7 @@ class Indexer {
       BigInt(block.header.number) % BigInt(this.pruneInterval) ===
       BigInt(0)
     ) {
-      await this.prune();
+      // await this.prune();
     }
   }
 

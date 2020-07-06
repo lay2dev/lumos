@@ -18,6 +18,11 @@ exports.up = function (knex) {
       table.bigInteger("block_number").primary().notNullable();
 
       table.binary("block_hash", 32).notNullable();
+
+      table.binary("epoch", 7).notNullable();
+      table.binary("dao", 32).notNullable();
+      table.bigInteger("timestamp").notNullable();
+
       table.unique(["block_hash"]);
     })
     .createTable("transaction_digests", function (table) {
@@ -42,6 +47,7 @@ exports.up = function (knex) {
 
       table.binary("previous_tx_hash", 32).notNullable();
       table.bigInteger("previous_index").notNullable();
+      table.bigInteger("input_index").notNullable();
       table.unique(
         ["previous_tx_hash", "previous_index", "transaction_digest_id"],
         "transaction_inputs_unique_index"
@@ -54,7 +60,9 @@ exports.up = function (knex) {
       table.integer("hash_type").notNullable();
       createBinaryColumn(knex, table, "args");
 
-      table.index(["code_hash", "hash_type"]);
+      table.binary("script_hash", 32).notNullable();
+
+      table.index(["code_hash", "hash_type", "script_hash"]);
     })
     .createTable("transactions_scripts", function (table) {
       table.increments("id");
