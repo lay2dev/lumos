@@ -88,6 +88,8 @@ async function ensureScriptInserted(trx, script, hasReturning) {
   return id;
 }
 
+const defaultBlockListener = (block) =>{}
+
 class Indexer {
   constructor(
     uri,
@@ -98,7 +100,8 @@ class Indexer {
       logger = defaultLogger,
       keepNum = 10000,
       pruneInterval = 2000,
-    } = {}
+    } = {},
+    newBlockListener = defaultBlockListener,
   ) {
     this.rpc = new RPC(uri);
     this.knex = knex;
@@ -108,6 +111,7 @@ class Indexer {
     this.isRunning = false;
     this.keepNum = keepNum;
     this.pruneInterval = pruneInterval;
+    this.newBlockListener = newBlockListener;
   }
 
   _hasReturning() {
@@ -322,6 +326,7 @@ class Indexer {
         }
       }
     });
+    this.newBlockListener(block);
     // prune old blocks
     if (
       BigInt(block.header.number) % BigInt(this.pruneInterval) ===

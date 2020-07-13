@@ -76,6 +76,7 @@ exports.up = function (knex) {
         .references("transaction_digests.id");
       table.integer("script_id").unsigned().notNullable();
       table.foreign("script_id").references("scripts.id");
+      table.index(['io_type']);
     })
     .createTable("cells", function (table) {
       table.increments("id");
