@@ -367,6 +367,7 @@ class Indexer {
           .del();
       }
       await trx("cells").where({ block_number: blockNumber }).del();
+      await trx("transaction_digests").where({ block_number: blockNumber }).del();
       await trx("block_digests").where({ block_number: blockNumber }).del();
     });
   }
