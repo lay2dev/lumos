@@ -20,6 +20,12 @@ function dbBigIntToHex(i) {
   return "0x" + BigInt(i).toString(16);
 }
 
+function dataLEToUint128(hexData) {
+  if (hexData.length < 34) {
+    hexData = hexData + "0".repeat(34 - hexData.length);
+  }
+  return utils.readBigUInt64LE(hexData).toString();
+}
 
 function nodeBufferToHex(b) {
   return new Reader(
@@ -72,7 +78,6 @@ async function ensureScriptInserted(trx, script, hasReturning) {
     args: hexToNodeBuffer(script.args),
     script_hash,
   };
-
 
   let ids = await trx("scripts").where(data).select("id");
   if (ids.length === 0) {
@@ -306,6 +311,7 @@ class Indexer {
             lock_script_id: lockScriptId,
             type_script_id: typeScriptId,
             data: hexToNodeBuffer(outputData),
+            // udt_amount: dataLEToUint128(outputData),
           });
           await trx("transactions_scripts").insert({
             script_type: SCRIPT_TYPE_LOCK,
